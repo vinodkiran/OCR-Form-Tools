@@ -2,13 +2,12 @@
 // Licensed under the MIT license.
 
 import React from "react";
-import {ITag} from "../../../../models/applicationState";
+import { ITag } from "../../../../models/applicationState";
 import "./predictResult.scss";
-import {getPrimaryGreenTheme} from "../../../../common/themes";
-import {PrimaryButton, ContextualMenu, IContextualMenuProps, IIconProps} from "@fluentui/react";
-import {strings} from "../../../../common/strings";
-import {tagIndexKeys} from "../../common/tagInput/tagIndexKeys";
-import {downloadFile, downloadZipFile, zipData} from "../../../../common/utils";
+import { getPrimaryGreenTheme } from "../../../../common/themes";
+import { FontIcon, PrimaryButton, ContextualMenu, IContextualMenuProps } from "@fluentui/react";
+import { strings } from "../../../../common/strings";
+import { downloadFile, downloadZipFile, zipData } from "../../../../common/utils";
 
 export interface IAnalyzeModelInfo {
     docType: string,
@@ -16,15 +15,37 @@ export interface IAnalyzeModelInfo {
     docTypeConfidence: number,
 }
 
+export interface ITableResultItem {
+    displayOrder: number,
+    fieldName: string,
+    type: string,
+    values: {},
+    rowKeys?: [],
+    columnKeys: [],
+}
+
+export interface IResultItem {
+    boundingBox: [],
+    confidence: number,
+    displayOrder: number,
+    elements: [],
+    fieldName: string,
+    page: number,
+    text: string,
+    type: string,
+    valueString: string,
+}
+
 export interface IPredictResultProps {
-    predictions: {[key: string]: any};
+    predictions: { [key: string]: any };
     analyzeResult: {};
     downloadPrefix?: string;
     page: number;
     tags: ITag[];
     downloadResultLabel: string;
     onAddAssetToProject?: () => void;
-    onPredictionClick?: (item: any) => void;
+    onPredictionClick?: (item: IResultItem) => void;
+    onTablePredictionClick?: (item: ITableResultItem, tagColor: string) => void;
     onPredictionMouseEnter?: (item: any) => void;
     onPredictionMouseLeave?: (item: any) => void;
 }
@@ -33,7 +54,7 @@ export interface IPredictResultState { }
 
 export default class PredictResult extends React.Component<IPredictResultProps, IPredictResultState> {
     public render() {
-        const {tags, predictions} = this.props;
+        const { tags, predictions } = this.props;
         const tagsDisplayOrder = tags.map((tag) => tag.name);
         for (const name of Object.keys(predictions)) {
             const prediction = predictions[name];
@@ -71,7 +92,7 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
                             theme={getPrimaryGreenTheme()}
                             onClick={this.onAddAssetToProject}
                             text={strings.predict.editAndUploadToTrainingSet} />
-                        :<span></span>
+                        : <span></span>
                     }
                     <PrimaryButton
                         className="align-self-end keep-button-120px"
@@ -84,7 +105,7 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
                     />
                 </div>
                 {this.props.children}
-                <div className="prediction-field-header" style={{marginTop: 28}}>
+                <div className="prediction-field-header" style={{ marginTop: 28 }}>
                     <h6 className="prediction-field-header-field"> Page # / Field name / Value</h6>
                     <h6 className="prediction-field-header-confidence"> Confidence</h6>
                 </div>
@@ -106,39 +127,67 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
             marginRight: "0px",
             background: this.getTagColor(item.fieldName),
         };
-        return (
-            <div key={key}
-                onClick={() => this.onPredictionClick(item)}
-                onMouseEnter={() => this.onPredictionMouseEnter(item)}
-                onMouseLeave={() => this.onPredictionMouseLeave(item)}>
-                <li className="predictiontag-item" style={style}>
-                    <div className={"predictiontag-color"}>
-                        <span>{item.page}</span>
-                    </div>
-                    <div className={"predictiontag-content"}>
-                        {this.getPredictionTagContent(item)}
-                    </div>
-                </li>
-                {item.text === null ?
-                    <>
-                        <li className={postProcessedValue ? "predictiontag-item-label-null mt-0" : "predictiontag-item-label-null mt-0 mb-1"}>
-                            {postProcessedValue ? "text: NULL": "NULL"}
-                        </li>
-                    </>
-                    :
-                    <>
-                        <li className={postProcessedValue ? "predictiontag-item-label mt-0" : "predictiontag-item-label mt-0 mb-1"}>
-                            {postProcessedValue ? "text: " + item.text : item.text}
-                        </li>
-                        {postProcessedValue &&
-                            <li className="predictiontag-item-label mb-1">
-                                {postProcessedValue}
+
+        if (item?.type === "array" || item?.type === "object") {
+            const pageNumber = this.getPageNumberFrom(item) || 1;
+
+            return (
+                <div key={key}
+                    onClick={() => {
+                        this.onTablePredictionClick(item, this.getTagColor(item.fieldName));
+                        this.onPredictionMouseLeave(item)
+                    }}
+                    onMouseEnter={() => this.onPredictionMouseEnter(item)}
+                    onMouseLeave={() => this.onPredictionMouseLeave(item)}>
+                    <li className="predictiontag-item" style={style}>
+                        <div className={"predictiontag-color"}>
+                            <span>{pageNumber}</span>
+                        </div>
+                        <div className={"predictiontag-content"}>
+                            {this.getPredictionTagContent(item)}
+                        </div>
+                    </li>
+                    <li className="predictiontag-item-label mt-0 mb-1">
+                        <FontIcon className="pr-1 pl-1" iconName="Table" />
+                        <span style={{ color: "rgba(255, 255, 255, 0.75)" }}>Click to view analyzed table</span>
+                    </li>
+                </div>
+            )
+        } else {
+            return (
+                <div key={key}
+                    onClick={() => this.onPredictionClick(item)}
+                    onMouseEnter={() => this.onPredictionMouseEnter(item)}
+                    onMouseLeave={() => this.onPredictionMouseLeave(item)}>
+                    <li className="predictiontag-item" style={style}>
+                        <div className={"predictiontag-color"}>
+                            <span>{item.page}</span>
+                        </div>
+                        <div className={"predictiontag-content"}>
+                            {this.getPredictionTagContent(item)}
+                        </div>
+                    </li>
+                    {item.text === null ?
+                        <>
+                            <li className={postProcessedValue ? "predictiontag-item-label-null mt-0" : "predictiontag-item-label-null mt-0 mb-1"}>
+                                {postProcessedValue ? "text: NULL" : "NULL"}
                             </li>
-                        }
-                    </>
-                }
-            </div>
-        );
+                        </>
+                        :
+                        <>
+                            <li className={postProcessedValue ? "predictiontag-item-label mt-0" : "predictiontag-item-label mt-0 mb-1"}>
+                                {postProcessedValue ? "text: " + item.text : item.text}
+                            </li>
+                            {postProcessedValue &&
+                                <li className="predictiontag-item-label mb-1">
+                                    {postProcessedValue}
+                                </li>
+                            }
+                        </>
+                    }
+                </div>
+            );
+        }
     }
 
     private getTagColor = (name: string): string => {
@@ -147,6 +196,10 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
             return tag.color;
         }
         return "#999999";
+    }
+
+    private isTableTag(item): boolean {
+        return (item.type === "array" || item.type === "object");
     }
 
     private getPredictionTagContent = (item: any) => {
@@ -174,7 +227,7 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
     }
 
     private triggerJSONDownload = (): void => {
-        const {analyzeResult} = this.props;
+        const { analyzeResult } = this.props;
         const predictionData = JSON.stringify(analyzeResult);
         downloadFile(predictionData, this.props.downloadResultLabel + ".json", this.props.downloadPrefix);
     }
@@ -184,7 +237,7 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
         const items = this.getItems();
         let csvContent: string = `Key,Value,Confidence,Page,Bounding Box`;
         items.forEach(item => {
-            csvContent += `\n"${item.fieldName}","${item.text ?? ""}",${isNaN(item.confidence)? "NaN":(item.confidence * 100).toFixed(2) + "%"},${item.page},"[${item.boundingBox}]"`;
+            csvContent += `\n"${item.fieldName}","${item.text ?? ""}",${isNaN(item.confidence) ? "NaN" : (item.confidence * 100).toFixed(2) + "%"},${item.page},"[${item.boundingBox}]"`;
         });
         data.push({
             fileName: `${this.props.downloadPrefix}${this.props.downloadResultLabel}-keyvalues.csv`,
@@ -192,15 +245,15 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
         });
 
         let tableContent: string = "";
-        const itemNames=["fieldName","text","confidence","page","boundingBox"];
-        const getValue=(item:any, fieldName:string)=>{
-            switch(fieldName){
+        const itemNames = ["fieldName", "text", "confidence", "page", "boundingBox"];
+        const getValue = (item: any, fieldName: string) => {
+            switch (fieldName) {
                 case "fieldName":
                     return `"${item[fieldName]}"`;
                 case "text":
                     return `"${item[fieldName]}"`;
                 case "confidence":
-                    return isNaN(item.confidence)? "NaN":(item.confidence * 100).toFixed(2) + "%";
+                    return isNaN(item.confidence) ? "NaN" : (item.confidence * 100).toFixed(2) + "%";
                 case "page":
                     return item[fieldName];
                 case "boundingBox":
@@ -209,12 +262,12 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
                     return "";
             }
         }
-        itemNames.forEach(name=>{
-            tableContent+=(name+",");
-            items.forEach(item=>{
-                tableContent+=(getValue(item,name)+",");
+        itemNames.forEach(name => {
+            tableContent += (name + ",");
+            items.forEach(item => {
+                tableContent += (getValue(item, name) + ",");
             })
-            tableContent+="\n";
+            tableContent += "\n";
         })
         data.push({
             fileName: `${this.props.downloadPrefix}${this.props.downloadResultLabel}-table.csv`,
@@ -224,7 +277,7 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
     }
 
     private getItems() {
-        const {tags, predictions} = this.props;
+        const { tags, predictions } = this.props;
         const tagsDisplayOrder = tags.map((tag) => tag.name);
         for (const name of Object.keys(predictions)) {
             const prediction = predictions[name];
@@ -245,6 +298,11 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
     private onPredictionClick = (prediction: any) => {
         if (this.props.onPredictionClick) {
             this.props.onPredictionClick(prediction);
+        }
+    }
+    private onTablePredictionClick = (prediction: any, tagColor) => {
+        if (this.props.onTablePredictionClick) {
+            this.props.onTablePredictionClick(prediction, tagColor);
         }
     }
 
@@ -296,6 +354,29 @@ export default class PredictResult extends React.Component<IPredictResultProps, 
             return valueType + ": " + postProcessedValue;
         } else {
             return null;
+        }
+    }
+
+    private getPageNumberFrom = (item: any) => {
+        if (item && item.hasOwnProperty("page")) {
+            return item.page;
+        }
+
+        // Get page number from item's children in a recursive way.
+        if (item && item.type === "object") {
+            for (const property of Object.keys(item.valueObject)) {
+                const pageNumber = this.getPageNumberFrom(item.valueObject[property]);
+                if (pageNumber) {
+                    return pageNumber;
+                }
+            }
+        } else if (item && item.type === "array") {
+            for (const element of item.valueArray) {
+                const pageNumber = this.getPageNumberFrom(element);
+                if (pageNumber) {
+                    return pageNumber;
+                }
+            }
         }
     }
 }
